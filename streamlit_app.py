@@ -1,27 +1,43 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
 from portfolio_logic import *
-from pypfopt import EfficientFrontier
 
-st.set_page_config(page_title="GenAI Wealth Advisor", layout="centered")
-st.title("💰 GenAI-based Wealth Advisor")
-st.markdown("Enter your investment profile to receive a personalized portfolio.")
+st.set_page_config(page_title="🤖 GenAI Wealth Advisor", layout="wide")
+st.markdown("""
+    <style>
+    .main { background-color: #f0f2f6; }
+    h1, h2, h3 { color: #2b2b52; }
+    .stButton>button {
+        background-color: #2b2b52;
+        color: white;
+        font-weight: bold;
+        border-radius: 12px;
+    }
+    .metric-label { color: #4b4b4b; font-weight: bold; }
+    </style>
+    <div style='text-align:center;'>
+        <img src='https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbGp5ZHM2b2s0ZW9hMmR3bHhseHlmcnE1czMyaHY4ZGw3bTc3a2NodCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/kH3Zh6hBqydZHyZK8r/giphy.gif' width='120'/>
+        <h1>GenAI Wealth Advisor</h1>
+        <p><em>Smart investing using AI-powered personalization</em></p>
+    </div>
+""", unsafe_allow_html=True)
 
-# User Inputs
-age = st.number_input("Your Age", min_value=18, max_value=100, value=30)
-income = st.number_input("Annual Income (₹)", min_value=0, step=50000, value=1000000)
-goal = st.selectbox("Investment Goal", ["wealth_growth", "retirement", "education", "marriage"])
-horizon = st.slider("Investment Horizon (Years)", min_value=1, max_value=30, value=10)
-tolerance = st.radio("Risk Tolerance", ["low", "medium", "high"])
+# Sidebar
+st.sidebar.header("🧾 Investor Profile")
+age = st.sidebar.slider("Age", 18, 100, 30)
+income = st.sidebar.number_input("Annual Income (₹)", min_value=0, step=50000, value=1000000)
+goal = st.sidebar.selectbox("Goal", ["wealth_growth", "retirement", "education", "marriage"])
+horizon = st.sidebar.slider("Investment Horizon (Years)", 1, 30, 10)
+tolerance = st.sidebar.radio("Risk Tolerance", ["low", "medium", "high"])
 
-opt_mode = st.selectbox("🎯 Optimization Goal", ["Max Sharpe Ratio", "Min Risk", "Target Return"])
+st.sidebar.markdown("""
+    <br>
+    <small><i>All allocations are AI-optimized based on historical data using PyPortfolioOpt.</i></small>
+""")
 
-target_ret = None
-if opt_mode == "Target Return":
-    target_ret = st.slider("🎯 Target Expected Return (%)", min_value=2.0, max_value=30.0, step=0.5, value=12.0)
-
-if st.button("Generate Portfolio"):
+if st.sidebar.button("🚀 Generate My Portfolio"):
     profile = {
         'age': age,
         'income': income,
@@ -31,79 +47,72 @@ if st.button("Generate Portfolio"):
     }
 
     risk_type = determine_risk_score(profile)
-    st.success(f"🧠 Risk Profile: **{risk_type}**")
+    st.success(f"🧠 AI-Detected Risk Profile: {risk_type}")
 
     data = load_sample_asset_data()
     assets = get_asset_universe(risk_type)
-    df = data[assets]
-    mu = expected_returns.mean_historical_return(df)
-    S = risk_models.sample_cov(df)
-    ef = EfficientFrontier(mu, S)
+    weights, ret, vol, sharpe = generate_portfolio(data, assets)
 
-    # Dynamic optimization
-    try:
-        if opt_mode == "Max Sharpe Ratio":
-            weights = ef.max_sharpe()
-        elif opt_mode == "Min Risk":
-            weights = ef.min_volatility()
-        elif opt_mode == "Target Return":
-            weights = ef.efficient_return(target_ret / 100)
-    except Exception as e:
-        st.error(f"Optimization Error: {e}")
-        st.stop()
+    mu = expected_returns.mean_historical_return(data[assets])
+    vol_data = data[assets].pct_change().std() * (12 ** 0.5)
 
-    cleaned_weights = ef.clean_weights()
-    ret, vol, sharpe = ef.portfolio_performance()
-
-    # Portfolio Table
-    asset_volatility = df.pct_change().std() * (12 ** 0.5)
     portfolio_df = pd.DataFrame({
-        "Asset": list(cleaned_weights.keys()),
-        "Allocation %": [round(w * 100, 2) for w in cleaned_weights.values()],
-        "Expected Return %": [round(mu[asset] * 100, 2) for asset in cleaned_weights.keys()],
-        "Risk (Volatility %)": [round(asset_volatility[asset] * 100, 2) for asset in cleaned_weights.keys()]
+        "Asset": list(weights.keys()),
+        "Allocation (%)": [round(w * 100, 2) for w in weights.values()],
+        "Expected Return (%)": [round(mu[a] * 100, 2) for a in weights.keys()],
+        "Volatility (%)": [round(vol_data[a] * 100, 2) for a in weights.keys()]
     })
 
-    st.subheader("📊 Recommended Portfolio")
-    st.dataframe(portfolio_df, use_container_width=True)
+    # Dynamic optimization sliders
+    st.markdown("### 🔄 Dynamic Optimization")
+    desired_return = st.slider("Desired Expected Return (%)", 0.0, 30.0, float(round(ret*100, 2)), 0.1)
+    desired_risk = st.slider("Maximum Acceptable Risk (Volatility %)", 0.0, 40.0, float(round(vol*100, 2)), 0.1)
 
-    st.subheader("📈 Portfolio Metrics")
-    st.metric("Expected Annual Return", f"{round(ret * 100, 2)}%")
-    st.metric("Risk (Volatility)", f"{round(vol * 100, 2)}%")
-    st.metric("Sharpe Ratio", round(sharpe, 2))
+    # Recompute optimized weights if sliders changed significantly
+    if desired_return > ret * 100 or desired_risk < vol * 100:
+        ef = EfficientFrontier(mu, risk_models.sample_cov(data[assets]))
+        ef.efficient_return(target_return=desired_return/100)
+        weights = ef.clean_weights()
+        ret, vol, sharpe = ef.portfolio_performance()
+        portfolio_df["Allocation (%)"] = [round(weights[a]*100, 2) for a in portfolio_df["Asset"]]
 
-    # Bar Chart
-    st.subheader("📉 Allocation Breakdown")
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.barh(portfolio_df["Asset"], portfolio_df["Allocation %"], color="skyblue", edgecolor="black")
-    ax.set_xlabel("Allocation (%)")
-    ax.set_title("Recommended Asset Allocation")
-    ax.invert_yaxis()
-    st.pyplot(fig)
+    # Fancy Table
+    st.markdown("### 📊 Personalized Portfolio Table")
+    st.dataframe(portfolio_df.style
+                 .background_gradient(cmap='PuBu', subset=["Allocation (%)"])
+                 .format({"Allocation (%)": "{:.2f}", "Expected Return (%)": "{:.2f}", "Volatility (%)": "{:.2f}"}))
+
+    # Portfolio Summary Metrics
+    st.markdown("### 📈 Portfolio Performance")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Expected Return", f"{round(ret * 100, 2)}%")
+    col2.metric("Volatility", f"{round(vol * 100, 2)}%")
+    col3.metric("Sharpe Ratio", round(sharpe, 2))
+
+    # Bar Chart for Allocation
+    fig = px.bar(portfolio_df, x="Allocation (%)", y="Asset", orientation="h", color="Asset",
+                 color_discrete_sequence=px.colors.sequential.RdBu, height=400)
+    fig.update_layout(title="Asset Allocation (%)", xaxis_title="%", yaxis_title="Asset")
+    st.plotly_chart(fig, use_container_width=True)
 
     # Explanations
-    st.subheader("🧠 Intelligent Explanation")
+    st.markdown("### 📘 AI Explanation")
+    for i, row in portfolio_df.iterrows():
+        st.markdown(f"**{row['Asset']}**: {row['Allocation (%)']}% allocation with an expected return of {row['Expected Return (%)']}% and volatility of {row['Volatility (%)']}%.")
+        if row['Expected Return (%)'] > 12:
+            st.markdown("🔺 This asset offers high growth but comes with higher risk.")
+        elif row['Expected Return (%)'] < 6:
+            st.markdown("🔻 This is a stable asset aimed at capital preservation.")
+        else:
+            st.markdown("⚖️ Balanced asset for moderate growth.")
 
-    # Simple rules-based explanation generator
-    explanation = []
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align:center;'>
+            <img src='https://media.giphy.com/media/QuoVJ2iGQvNeekxjAH/giphy.gif' width='300'/><br>
+            <small><i>Powered by GenAI & PyPortfolioOpt for intelligent portfolio design 🚀</i></small>
+        </div>
+    """, unsafe_allow_html=True)
 
-    top_asset = portfolio_df.loc[portfolio_df["Allocation %"].idxmax(), "Asset"]
-    if ret > 0.15:
-        explanation.append("🚀 This is a high-growth portfolio with a strong focus on return-oriented assets.")
-    elif ret < 0.07:
-        explanation.append("🛡️ This is a conservative portfolio with emphasis on capital preservation.")
-
-    if vol > 0.20:
-        explanation.append("⚠️ The volatility is relatively high, which means you should expect short-term fluctuations.")
-    elif vol < 0.10:
-        explanation.append("✅ The portfolio is designed to be stable with minimal risk.")
-
-    if top_asset in ["Equity", "Crypto"]:
-        explanation.append(f"📈 High allocation to **{top_asset}** indicates a growth-driven strategy.")
-    elif top_asset in ["Debt", "Gold", "Cash"]:
-        explanation.append(f"💵 Dominant investment in **{top_asset}** suggests safety-focused wealth preservation.")
-
-    explanation.append(f"📌 This strategy aligns with your **{risk_type}** risk profile.")
-
-    for line in explanation:
-        st.markdown(line)
+else:
+    st.info("🧠 Enter your profile and click 'Generate My Portfolio' to get started!")
