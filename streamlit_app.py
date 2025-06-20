@@ -14,6 +14,12 @@ goal = st.selectbox("Investment Goal", ["wealth_growth", "retirement", "educatio
 horizon = st.slider("Investment Horizon (Years)", min_value=1, max_value=30, value=10)
 tolerance = st.radio("Risk Tolerance", ["low", "medium", "high"])
 
+# Dynamic Optimization Selector
+optimization_method = st.selectbox(
+    "Optimization Strategy",
+    ["Maximize Sharpe Ratio", "Minimize Volatility", "Maximize Return"]
+)
+
 if st.button("Generate Portfolio"):
     profile = {
         'age': age,
@@ -28,11 +34,13 @@ if st.button("Generate Portfolio"):
 
     data = load_sample_asset_data()
     assets = get_asset_universe(risk_type)
-    weights, ret, vol, sharpe = generate_portfolio(data, assets)
 
-    st.subheader("📊 Detailed Recommended Portfolio")
+    # Pass selected optimization strategy
+    weights, ret, vol, sharpe = generate_portfolio(data, assets, optimization_method)
 
-    # Create a detailed DataFrame for display
+    st.subheader("📊 Recommended Portfolio Breakdown")
+
+    # Create Portfolio Table
     mu = expected_returns.mean_historical_return(data[assets])
     asset_volatility = data[assets].pct_change().std() * (12 ** 0.5)
 
@@ -45,18 +53,30 @@ if st.button("Generate Portfolio"):
 
     st.dataframe(portfolio_df, use_container_width=True)
 
-    # Display Portfolio Metrics
+    # Portfolio Metrics
     st.subheader("📈 Portfolio Metrics")
     st.metric("Expected Annual Return", f"{round(ret * 100, 2)}%")
     st.metric("Risk (Volatility)", f"{round(vol * 100, 2)}%")
     st.metric("Sharpe Ratio", round(sharpe, 2))
 
-    # 📊 Horizontal Bar Chart for Asset Allocation%
+    # Horizontal Bar Chart
     st.subheader("📉 Allocation Visualization")
-
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.barh(portfolio_df["Asset"], portfolio_df["Allocation %"], color="skyblue", edgecolor="black")
     ax.set_xlabel("Allocation (%)")
     ax.set_title("Recommended Asset Allocation")
-    ax.invert_yaxis()  # Highest allocation on top
+    ax.invert_yaxis()
     st.pyplot(fig)
+
+    # Explanation Section
+    with st.expander("📘 Explanation of Terms"):
+        st.markdown("""
+        - **Allocation %**: Percentage of your total capital allocated to each asset. Higher weight means more investment.
+        - **Expected Return %**: The projected annual gain based on historical trends.
+        - **Risk (Volatility %)**: Measures how much the asset's return fluctuates. Higher volatility = higher uncertainty.
+        - **Sharpe Ratio**: Adjusted return per unit of risk. A higher Sharpe ratio means better risk-adjusted returns.
+        - **Optimization Strategy**:
+            - **Maximize Sharpe Ratio**: Best return relative to risk.
+            - **Minimize Volatility**: Focuses on portfolio stability.
+            - **Maximize Return**: Focuses purely on highest potential gain.
+        """)
