@@ -2,6 +2,5 @@ streamlit
 pandas
 numpy
 matplotlib
-PyPortfolioOpt
 scikit-learn
-streamlit-lottie
+PyPortfolioOpt
