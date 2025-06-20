@@ -1,43 +1,46 @@
 import streamlit as st
+from streamlit_lottie import st_lottie
+import json
 import matplotlib.pyplot as plt
-import pandas as pd
-import plotly.express as px
 from portfolio_logic import *
 
-st.set_page_config(page_title="🤖 GenAI Wealth Advisor", layout="wide")
-st.markdown("""
-    <style>
-    .main { background-color: #f0f2f6; }
-    h1, h2, h3 { color: #2b2b52; }
-    .stButton>button {
-        background-color: #2b2b52;
-        color: white;
-        font-weight: bold;
-        border-radius: 12px;
-    }
-    .metric-label { color: #4b4b4b; font-weight: bold; }
-    </style>
-    <div style='text-align:center;'>
-        <img src='https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbGp5ZHM2b2s0ZW9hMmR3bHhseHlmcnE1czMyaHY4ZGw3bTc3a2NodCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/kH3Zh6hBqydZHyZK8r/giphy.gif' width='120'/>
-        <h1>GenAI Wealth Advisor</h1>
-        <p><em>Smart investing using AI-powered personalization</em></p>
-    </div>
-""", unsafe_allow_html=True)
+# Page Config
+st.set_page_config(page_title="GenAI Wealth Advisor", layout="wide")
 
-# Sidebar
-st.sidebar.header("🧾 Investor Profile")
-age = st.sidebar.slider("Age", 18, 100, 30)
-income = st.sidebar.number_input("Annual Income (₹)", min_value=0, step=50000, value=1000000)
-goal = st.sidebar.selectbox("Goal", ["wealth_growth", "retirement", "education", "marriage"])
-horizon = st.sidebar.slider("Investment Horizon (Years)", 1, 30, 10)
-tolerance = st.sidebar.radio("Risk Tolerance", ["low", "medium", "high"])
+# Load animation
+def load_lottie(path):
+    with open(path, "r") as f:
+        return json.load(f)
 
-st.sidebar.markdown("""
-    <br>
-    <small><i>All allocations are AI-optimized based on historical data using PyPortfolioOpt.</i></small>
-""")
+lottie_animation = load_lottie("assets/animation.json")
 
-if st.sidebar.button("🚀 Generate My Portfolio"):
+# Top Section
+col1, col2 = st.columns([1, 2])
+with col1:
+    st_lottie(lottie_animation, height=300, speed=1)
+with col2:
+    st.title("🧠 GenAI Wealth Advisor")
+    st.markdown("""
+    Welcome to your AI-powered investment planner. Provide your profile and goals, and we’ll generate an optimal, personalized portfolio using real-time financial modeling.
+    """)
+
+st.markdown("---")
+
+# Dynamic Inputs
+st.subheader("🎯 Personalize Your Investment Plan")
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    age = st.slider("Your Age", 18, 70, 30)
+with col2:
+    income = st.slider("Annual Income (₹)", 200000, 3000000, 1000000, step=50000)
+with col3:
+    horizon = st.slider("Investment Horizon (Years)", 1, 30, 10)
+
+goal = st.selectbox("Investment Goal 🎓", ["wealth_growth", "retirement", "education", "marriage"])
+tolerance = st.select_slider("Risk Tolerance", options=["low", "medium", "high"])
+
+if st.button("🔍 Generate Optimized Portfolio"):
     profile = {
         'age': age,
         'income': income,
@@ -47,72 +50,65 @@ if st.sidebar.button("🚀 Generate My Portfolio"):
     }
 
     risk_type = determine_risk_score(profile)
-    st.success(f"🧠 AI-Detected Risk Profile: {risk_type}")
+    st.success(f"🧠 Risk Profile: **{risk_type}**")
 
+    # Portfolio Logic
     data = load_sample_asset_data()
     assets = get_asset_universe(risk_type)
     weights, ret, vol, sharpe = generate_portfolio(data, assets)
 
-    mu = expected_returns.mean_historical_return(data[assets])
-    vol_data = data[assets].pct_change().std() * (12 ** 0.5)
+    st.subheader("📊 Portfolio Allocation")
 
-    portfolio_df = pd.DataFrame({
-        "Asset": list(weights.keys()),
-        "Allocation (%)": [round(w * 100, 2) for w in weights.values()],
-        "Expected Return (%)": [round(mu[a] * 100, 2) for a in weights.keys()],
-        "Volatility (%)": [round(vol_data[a] * 100, 2) for a in weights.keys()]
-    })
+    # Horizontal Bar Chart
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.barh(list(weights.keys()), [w * 100 for w in weights.values()], color='teal')
+    ax.set_xlabel("Allocation %")
+    ax.set_title("Asset Allocation by GenAI Advisor")
+    ax.invert_yaxis()
+    st.pyplot(fig)
 
-    # Dynamic optimization sliders
-    st.markdown("### 🔄 Dynamic Optimization")
-    desired_return = st.slider("Desired Expected Return (%)", 0.0, 30.0, float(round(ret*100, 2)), 0.1)
-    desired_risk = st.slider("Maximum Acceptable Risk (Volatility %)", 0.0, 40.0, float(round(vol*100, 2)), 0.1)
-
-    # Recompute optimized weights if sliders changed significantly
-    if desired_return > ret * 100 or desired_risk < vol * 100:
-        ef = EfficientFrontier(mu, risk_models.sample_cov(data[assets]))
-        ef.efficient_return(target_return=desired_return/100)
-        weights = ef.clean_weights()
-        ret, vol, sharpe = ef.portfolio_performance()
-        portfolio_df["Allocation (%)"] = [round(weights[a]*100, 2) for a in portfolio_df["Asset"]]
-
-    # Fancy Table
-    st.markdown("### 📊 Personalized Portfolio Table")
-    st.dataframe(portfolio_df.style
-                 .background_gradient(cmap='PuBu', subset=["Allocation (%)"])
-                 .format({"Allocation (%)": "{:.2f}", "Expected Return (%)": "{:.2f}", "Volatility (%)": "{:.2f}"}))
-
-    # Portfolio Summary Metrics
-    st.markdown("### 📈 Portfolio Performance")
+    # Portfolio Metrics
+    st.subheader("📈 Portfolio Performance Summary")
     col1, col2, col3 = st.columns(3)
     col1.metric("Expected Return", f"{round(ret * 100, 2)}%")
-    col2.metric("Volatility", f"{round(vol * 100, 2)}%")
-    col3.metric("Sharpe Ratio", round(sharpe, 2))
+    col2.metric("Risk (Volatility)", f"{round(vol * 100, 2)}%")
+    col3.metric("Sharpe Ratio", f"{round(sharpe, 2)}")
 
-    # Bar Chart for Allocation
-    fig = px.bar(portfolio_df, x="Allocation (%)", y="Asset", orientation="h", color="Asset",
-                 color_discrete_sequence=px.colors.sequential.RdBu, height=400)
-    fig.update_layout(title="Asset Allocation (%)", xaxis_title="%", yaxis_title="Asset")
-    st.plotly_chart(fig, use_container_width=True)
+    # 📖 AI-Based Explanation
+    st.markdown("### 🤖 Investment Strategy Summary")
 
-    # Explanations
-    st.markdown("### 📘 AI Explanation")
-    for i, row in portfolio_df.iterrows():
-        st.markdown(f"**{row['Asset']}**: {row['Allocation (%)']}% allocation with an expected return of {row['Expected Return (%)']}% and volatility of {row['Volatility (%)']}%.")
-        if row['Expected Return (%)'] > 12:
-            st.markdown("🔺 This asset offers high growth but comes with higher risk.")
-        elif row['Expected Return (%)'] < 6:
-            st.markdown("🔻 This is a stable asset aimed at capital preservation.")
+    def explain_portfolio(risk_type, weights, ret, vol, sharpe):
+        lines = []
+
+        if risk_type == "Conservative":
+            lines.append("You're assigned a **Conservative** profile, which emphasizes capital preservation and low volatility.")
+        elif risk_type == "Balanced":
+            lines.append("Your profile is **Balanced**, targeting a mix of growth and stability.")
         else:
-            st.markdown("⚖️ Balanced asset for moderate growth.")
+            lines.append("You're classified as **Aggressive**, aiming for high returns with higher risk.")
+
+        major_asset = max(weights, key=weights.get)
+        lines.append(f"Your largest allocation is in **{major_asset}**, indicating a strategic tilt.")
+
+        if ret > 0.10:
+            lines.append(f"The portfolio is expected to grow at a strong **{round(ret * 100, 2)}% annual return**.")
+        else:
+            lines.append(f"The expected return is a stable **{round(ret * 100, 2)}% annually**.")
+
+        if vol > 0.15:
+            lines.append("Note: Risk is relatively high, which aligns with growth-oriented strategies.")
+        elif vol < 0.08:
+            lines.append("Risk is well-contained, suitable for preservation-focused goals.")
+
+        if sharpe >= 1:
+            lines.append("✅ **Sharpe Ratio is healthy**, meaning returns outweigh the risk.")
+        else:
+            lines.append("⚠️ Consider revising risk or horizon to improve risk-adjusted return.")
+
+        return "\n\n".join(lines)
+
+    st.markdown(explain_portfolio(risk_type, weights, ret, vol, sharpe))
 
     st.markdown("---")
-    st.markdown("""
-        <div style='text-align:center;'>
-            <img src='https://media.giphy.com/media/QuoVJ2iGQvNeekxjAH/giphy.gif' width='300'/><br>
-            <small><i>Powered by GenAI & PyPortfolioOpt for intelligent portfolio design 🚀</i></small>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown("🔄 You can go back and change your inputs anytime to re-optimize your plan.")
 
-else:
-    st.info("🧠 Enter your profile and click 'Generate My Portfolio' to get started!")
