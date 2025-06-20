@@ -2,25 +2,6 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from portfolio_logic import *
 import pandas as pd
-# ---------- Style Setup ----------
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-        background-color: #f5f8ff;
-        color: #003366;
-    }
-
-    h1, h2, h3, h4 {
-        color: #004d99;
-    }
-
-    .stButton > button {
-        background-color: #004d99;
-        col
-
 # --------------- Streamlit Config ----------------
 st.set_page_config(page_title="GenAI Wealth Advisor", layout="centered", page_icon="💰")
 
