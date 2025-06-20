@@ -6,6 +6,31 @@ import pandas as pd
 # --------------- Streamlit Config ----------------
 st.set_page_config(page_title="GenAI Wealth Advisor", layout="centered", page_icon="💰")
 
+# ---------- Static CSS Styling ----------
+st.markdown("""
+    <style>
+    body {
+        background-color: #f5f7fa;
+    }
+    .reportview-container {
+        background: #f5f7fa;
+    }
+    .big-font {
+        font-size: 28px !important;
+        font-weight: bold;
+        color: #004d99;
+    }
+    .metric-box {
+        border: 1px solid #e6e6e6;
+        padding: 15px;
+        border-radius: 10px;
+        background: #f7f9fc;
+        margin-bottom: 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 # --------------- Function for Dynamic Background ----------------
 def set_background_by_risk(risk_type):
     color_map = {
@@ -63,8 +88,22 @@ if st.button("📊 Generate Personalized Portfolio"):
     }
 
     risk_type = determine_risk_score(profile)
-    set_background_by_risk(risk_type)  # Set dynamic background
-    st.markdown(f"### 🧠 Risk Profile: **{risk_type}**")
+# ---------- Dynamic Background based on Risk ----------
+bg_color = {
+    "Conservative": "#d6f5d6",  # Light Green
+    "Balanced": "#fff5cc",      # Light Yellow
+    "Aggressive": "#ffe6e6"     # Light Red
+}.get(risk_type, "#f5f7fa")
+
+# Inject dynamic background color
+st.markdown(f"""
+    <style>
+    .reportview-container {{
+        background-color: {bg_color};
+    }}
+    </style>
+""", unsafe_allow_html=True)
+
 
     data = load_sample_asset_data()
 
