@@ -88,14 +88,15 @@ if st.button("📊 Generate Personalized Portfolio"):
     }
 
     risk_type = determine_risk_score(profile)
-# ---------- Dynamic Background based on Risk ----------
+st.markdown(f"### 🧠 Risk Profile: **{risk_type}**")
+
+# ---------- Dynamic Background Color ----------
 bg_color = {
-    "Conservative": "#d6f5d6",  # Light Green
-    "Balanced": "#fff5cc",      # Light Yellow
-    "Aggressive": "#ffe6e6"     # Light Red
+    "Conservative": "#d6f5d6",
+    "Balanced": "#fff5cc",
+    "Aggressive": "#ffe6e6"
 }.get(risk_type, "#f5f7fa")
 
-# Inject dynamic background color
 st.markdown(f"""
     <style>
     .reportview-container {{
@@ -103,7 +104,6 @@ st.markdown(f"""
     }}
     </style>
 """, unsafe_allow_html=True)
-
 
     data = load_sample_asset_data()
 
