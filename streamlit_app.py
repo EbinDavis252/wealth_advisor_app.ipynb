@@ -1,12 +1,10 @@
-# streamlit_app.py
 import streamlit as st
 import matplotlib.pyplot as plt
+import pandas as pd
 from portfolio_logic import *
 
 st.set_page_config(page_title="GenAI Wealth Advisor", layout="centered")
-
 st.title("💰 GenAI-based Wealth Advisor")
-
 st.markdown("Enter your investment profile to receive a personalized portfolio.")
 
 # User Inputs
@@ -26,21 +24,39 @@ if st.button("Generate Portfolio"):
     }
 
     risk_type = determine_risk_score(profile)
-    st.success(f"Risk Profile: **{risk_type}**")
+    st.success(f"🧠 Risk Profile: **{risk_type}**")
 
     data = load_sample_asset_data()
     assets = get_asset_universe(risk_type)
     weights, ret, vol, sharpe = generate_portfolio(data, assets)
 
-    st.subheader("📊 Recommended Portfolio")
-    st.write({k: f"{round(v*100, 2)}%" for k, v in weights.items()})
+    st.subheader("📊 Detailed Recommended Portfolio")
 
-    st.metric("Expected Annual Return", f"{round(ret*100, 2)}%")
-    st.metric("Risk (Volatility)", f"{round(vol*100, 2)}%")
+    # Create a detailed DataFrame for display
+    mu = expected_returns.mean_historical_return(data[assets])
+    asset_volatility = data[assets].pct_change().std() * (12 ** 0.5)
+
+    portfolio_df = pd.DataFrame({
+        "Asset": list(weights.keys()),
+        "Allocation %": [round(w * 100, 2) for w in weights.values()],
+        "Expected Return %": [round(mu[asset] * 100, 2) for asset in weights.keys()],
+        "Risk (Volatility %)": [round(asset_volatility[asset] * 100, 2) for asset in weights.keys()]
+    })
+
+    st.dataframe(portfolio_df, use_container_width=True)
+
+    # Display Portfolio Metrics
+    st.subheader("📈 Portfolio Metrics")
+    st.metric("Expected Annual Return", f"{round(ret * 100, 2)}%")
+    st.metric("Risk (Volatility)", f"{round(vol * 100, 2)}%")
     st.metric("Sharpe Ratio", round(sharpe, 2))
 
-    # Pie Chart
-    fig, ax = plt.subplots()
-    ax.pie(weights.values(), labels=weights.keys(), autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')
+    # 📊 Horizontal Bar Chart for Asset Allocation%
+    st.subheader("📉 Allocation Visualization")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.barh(portfolio_df["Asset"], portfolio_df["Allocation %"], color="skyblue", edgecolor="black")
+    ax.set_xlabel("Allocation (%)")
+    ax.set_title("Recommended Asset Allocation")
+    ax.invert_yaxis()  # Highest allocation on top
     st.pyplot(fig)
