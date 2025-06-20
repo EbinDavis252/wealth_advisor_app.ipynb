@@ -38,11 +38,27 @@ def get_asset_universe(risk_type):
     else:
         return ["Equity", "Crypto", "REIT", "Gold"]
 
-def generate_portfolio(prices, assets):
+def generate_portfolio(prices, assets, method="Maximize Sharpe Ratio"):
     df = prices[assets]
     mu = expected_returns.mean_historical_return(df)
     S = risk_models.sample_cov(df)
+
     ef = EfficientFrontier(mu, S)
+
+    if method == "Maximize Sharpe Ratio":
+        ef.max_sharpe()
+    elif method == "Minimize Volatility":
+        ef.min_volatility()
+    elif method == "Maximize Return":
+        ef.max_return()
+    else:
+        ef.max_sharpe()  # fallback
+
+    cleaned_weights = ef.clean_weights()
+    ret, vol, sharpe = ef.portfolio_performance()
+    return cleaned_weights, ret, vol, sharpe
+
+    
     weights = ef.max_sharpe()
     cleaned_weights = ef.clean_weights()
     ret, vol, sharpe = ef.portfolio_performance()
